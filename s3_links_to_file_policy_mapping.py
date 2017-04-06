@@ -6,8 +6,9 @@ from mongo import client
 
 class PolicyFileService(object):
 
-    def __init__(self, db):
+    def __init__(self, db, bucketName):
         self.db = db
+        self.bucketName = bucketName
 
     def __download_file(self, policy_s3):
         req = requests.get(policy_s3.get('policyUrl'), stream=True)
@@ -26,7 +27,7 @@ class PolicyFileService(object):
 
     def __upload_and_migrate(self, policy_s3):
         file_info = {'file': open(policy_s3.get("_id"), 'rb')}
-        values = {'host': 'localhost', 'bucketName': 'docs.turtlemint.com'}
+        values = {'host': 'localhost', 'bucketName': self.bucketName}
         res = requests.post('http://localhost:9011/v1/file/upload', files=file_info, data=values)
         if res.status_code == 200:
             policy_doc = self.__policy_doc(res.json())
@@ -45,5 +46,5 @@ class PolicyFileService(object):
 if __name__ == '__main__':
     config = Config()
     db_obj = client(config.username, config.password, config.database)
-    policyFileService = PolicyFileService(db_obj[config.database])
+    policyFileService = PolicyFileService(db_obj[config.database], config.bucketName)
     policyFileService.migrate()
