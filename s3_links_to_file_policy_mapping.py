@@ -10,12 +10,13 @@ class PolicyFileService(object):
         self.db = db
         self.bucketName = bucketName
 
-    def __download_file(self, policy_s3):
+    def __download_and_get_content_type(self, policy_s3):
         req = requests.get(policy_s3.get('policyUrl'), stream=True)
         with open(policy_s3.get('_id'), 'wb') as f:
             for chunk in req.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
+        return req.headers.get('Content-Type')
 
     def __policy_doc(self, policy_s3,  response):
         return {
@@ -26,11 +27,12 @@ class PolicyFileService(object):
     def __insert_into_policy_file(self, policy_doc):
         print self.db['PolicyFile'].insert_one(policy_doc)
 
-    def __upload_and_migrate(self, policy_s3):
-        file_info = {'file': open(policy_s3.get("_id"), 'rb')}
+    def __upload_and_migrate(self, policy_s3, content_type):
+        file_info = {'file': ('some.pdf', open(policy_s3.get("_id"), 'rb'), content_type)}
         values = {'host': 'localhost', 'bucketName': self.bucketName}
         res = requests.post('http://localhost:9011/v1/file/upload', files=file_info, data=values)
         if res.status_code == 200:
+            print res.json()
             policy_doc = self.__policy_doc(policy_s3, res.json())
             self.__insert_into_policy_file(policy_doc)
 
@@ -40,8 +42,8 @@ class PolicyFileService(object):
     def migrate(self):
         policy_s3 = self.db['PolicyDetail'].find({'policyUrl': {'$exists': True, '$ne': None }})[0]
         if policy_s3.has_key('policyUrl'):
-            self.__download_file(policy_s3)
-            self.__upload_and_migrate(policy_s3)
+            content_type=self.__download_and_get_content_type(policy_s3)
+            self.__upload_and_migrate(policy_s3, content_type)
             self.__remove_downloaded_file(policy_s3)
 
 
