@@ -17,9 +17,10 @@ class PolicyFileService(object):
                 if chunk:
                     f.write(chunk)
 
-    def __policy_doc(self, response):
+    def __policy_doc(self, policy_s3,  response):
         return {
-                'document_id': response.get('data').get('id')
+                'documentId': response.get('data').get('id'),
+                'customerId': policy_s3.get('customerId')
             }
 
     def __insert_into_policy_file(self, policy_doc):
@@ -30,17 +31,18 @@ class PolicyFileService(object):
         values = {'host': 'localhost', 'bucketName': self.bucketName}
         res = requests.post('http://localhost:9011/v1/file/upload', files=file_info, data=values)
         if res.status_code == 200:
-            policy_doc = self.__policy_doc(res.json())
+            policy_doc = self.__policy_doc(policy_s3, res.json())
             self.__insert_into_policy_file(policy_doc)
 
     def __remove_downloaded_file(self, policy_s3):
         os.remove(policy_s3.get('_id'))
 
     def migrate(self):
-        policy_s3 = self.db['PolicyS3'].find_one()
-        self.__download_file(policy_s3)
-        self.__upload_and_migrate(policy_s3)
-        self.__remove_downloaded_file(policy_s3)
+        policy_s3 = self.db['PolicyDetail'].find({'policyUrl': {'$exists': True, '$ne': None }})[0]
+        if policy_s3.has_key('policyUrl'):
+            self.__download_file(policy_s3)
+            self.__upload_and_migrate(policy_s3)
+            self.__remove_downloaded_file(policy_s3)
 
 
 if __name__ == '__main__':
