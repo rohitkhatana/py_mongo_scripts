@@ -10,45 +10,31 @@ class PolicyFileService(object):
         self.db = db
         self.bucketName = bucketName
 
-    def __download_and_get_content_type(self, policy_s3):
-        req = requests.get(policy_s3.get('policyUrl'), stream=True)
-        with open(policy_s3.get('_id'), 'wb') as f:
-            for chunk in req.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-        return req.headers.get('Content-Type')
+    def __insert_into_file_mapping(self, policy_detail):
+        return self.db['fileMapping'].insert_one(self.__policy_mapping(policy_detail))
 
-    def __policy_doc(self, policy_s3,  response):
+    def __policy_mapping(self, policy_detail):
         return {
-                'documentId': response.get('data').get('id'),
-                'customerId': policy_s3.get('customerId')
-            }
+            'key': policy_detail.get('policyUrl'), #.split('https://docs.turtlemint.com/')[1],
+            'bucketName': 'docs.turtlemint.com',
+            'host': 'localhost'
+        }
 
-    def __insert_into_policy_file(self, policy_doc):
-        print self.db['PolicyFile'].insert_one(policy_doc)
-
-    def __upload_and_migrate(self, policy_s3, content_type):
-        file_info = {'file': ('some.pdf', open(policy_s3.get("_id"), 'rb'), content_type)}
-        values = {'host': 'localhost', 'bucketName': self.bucketName}
-        res = requests.post('http://localhost:9011/v1/file/upload', files=file_info, data=values)
-        if res.status_code == 200:
-            print res.json()
-            policy_doc = self.__policy_doc(policy_s3, res.json())
-            self.__insert_into_policy_file(policy_doc)
-
-    def __remove_downloaded_file(self, policy_s3):
-        os.remove(policy_s3.get('_id'))
+    def __update_policy_detail(self, policy_detail, policy_mapping):
+        policy_detail['policyDocumentId'] = str(policy_mapping.inserted_id)
+        self.db['PolicyDetail'].update({'_id': policy_detail.get('_id')}, {'$set': policy_detail}, upsert=False)
 
     def migrate(self):
-        policy_s3 = self.db['PolicyDetail'].find({'policyUrl': {'$exists': True, '$ne': None }})[0]
-        if policy_s3.has_key('policyUrl'):
-            content_type=self.__download_and_get_content_type(policy_s3)
-            self.__upload_and_migrate(policy_s3, content_type)
-            self.__remove_downloaded_file(policy_s3)
+        policy_detail = self.db['PolicyDetail'].find({'policyUrl': {'$exists': True, '$ne': None }})[0]
+        if policy_detail.has_key('policyUrl'):
+            print policy_detail.get('policyUrl')
+            policy_mapping = self.__insert_into_file_mapping(policy_detail)
+            self.__update_policy_detail(policy_detail, policy_mapping)
 
 
 if __name__ == '__main__':
     config = Config()
     db_obj = client(config.username, config.password, config.database)
+    #db_obj = client('turt#Dev', 'hD=h7wb#', 'turtlemint')
     policyFileService = PolicyFileService(db_obj[config.database], config.bucketName)
     policyFileService.migrate()
