@@ -15,7 +15,7 @@ class PolicyFileService(object):
 
     def __policy_mapping(self, policy_detail):
         return {
-            'key': policy_detail.get('policyUrl'), #.split('https://docs.turtlemint.com/')[1],
+            'key': policy_detail.get('policyUrl'),
             'bucketName': 'docs.turtlemint.com',
             'host': 'localhost'
         }
